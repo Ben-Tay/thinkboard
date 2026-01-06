@@ -4,6 +4,7 @@ import { connectDb } from "./config/db.js";
 import dotenv from "dotenv"
 import rateLimiter from "./middleware/rateLimiter.js";
 import cors from "cors";
+import path from "path";
 
 // Allow env variables accessibility
 dotenv.config();
@@ -11,6 +12,7 @@ dotenv.config();
 
 const app = express();
 const port = process.env.PORT || 5001
+const __dirname = path.resolve() // it resolves to the backend folder
 
 // What is an Endpoint?
 // An endpoint is a combination of a URL + HTTP method that lets
@@ -27,11 +29,14 @@ app.use((req, _, next) => {
 
 
 // Middleware to allow cors sharing for other domain to acess the API
-app.use(cors({
+// only needed in dev cuz 2 domains
+if (process.env.NODE_ENV !== "production") {
+    app.use(cors({
     origin: "http://localhost:5173", // only allow the frontend to access
     methods: ["GET", "POST", "PUT", "DELETE"],
     credentials: true
-}));
+    }));
+}
 
 
 // Use cases of middleware ==> authentication check/rate limiting (eg: control how often someone can do something on an website or app ==> page refresh, api request, login attempts)
@@ -41,6 +46,18 @@ app.use(rateLimiter);
 
 // Use a router middleware to allow for synthetic sugar
 app.use("/api/notes", notesRoutes)
+
+// Only do if in production to serve frontend and backend in same domain
+if(process.env.NODE_ENV === "production") {
+    // add a config to allow frontend and backend to be served from same domain
+    app.use(express.static(path.join(__dirname, "../frontend/dist"))); // serve the optimise frontend as a static file
+
+    // if get any route other than api/notes, serve the react application
+    app.get("*", (req,res) => {
+        res.sendFile(path.join(__dirname),"../frontend","dist","index.html") // serve the index.html file under dist
+    }) 
+}
+
 
 // Connect to the DB first before listening on the port
 connectDb().then(() => {
